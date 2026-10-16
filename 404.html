@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The page's security policy (GitHub Pages cannot send headers, so it rides in a meta tag; it must stay before every
+         script and link). Scripts: this site only, plus WebAssembly (Skia's CanvasKit). Styles keep 'unsafe-inline' because
+         react-native-web, Reanimated and expo-font inject <style> tags. Network: Supabase (production), PostHog and Sentry
+         only, plus Google's sign-in button (its four documented paths under https://accounts.google.com/gsi/: the script,
+         its stylesheet, its button frame and its calls; src/auth/googleWeb.ts). Tested against the production build.
+         To check when web payments (Polar) turn on: a checkout that opens in the same tab needs nothing; one that
+         embeds needs https://*.polar.sh in frame-src (and connect-src if the page calls its API). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://lipuxymlsowdrbummqxw.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://*.ingest.us.sentry.io https://accounts.google.com/gsi/; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; frame-src https://accounts.google.com/gsi/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!-- Web Memento is not listed in search until launch (fable/web). -->
+    <meta name="robots" content="noindex" />
+    <title>Memento</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Add to Home Screen / Chrome install (no service worker yet). The 180 px icon is opaque: iOS rounds it itself. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Memento" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="preload" href="/canvaskit.eb68c7a7f602.wasm" as="fetch" type="application/wasm" crossorigin="anonymous" />
+    <link rel="preload" href="/assets/assets/fonts/geist-400.bc38acc9cb4791c1285343e535d70db7.otf" as="font" type="font/otf" crossorigin="anonymous" />
+    <link rel="preload" href="/assets/assets/fonts/geist-500.723f8143159d2d69f433a5d68f3378bd.otf" as="font" type="font/otf" crossorigin="anonymous" />
+    <link rel="preload" href="/assets/assets/fonts/geist-700.1f051f06d37df49cea95192fb2a3a419.otf" as="font" type="font/otf" crossorigin="anonymous" />
+    <style id="expo-reset">
+      /* Black from the first frame, so the load never flashes white. */
+      html, body { height: 100%; margin: 0; background: #000000; }
+      /* The app's font for text react-native-web does not style itself (chart labels drawn as SVG text inherit it):
+         react-native-web's system stack, so nothing falls back to the browser's serif. */
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      body { overflow: hidden; }
+      #root { display: flex; height: 100%; flex: 1; }
+      noscript { display: block; padding: 24px; color: #f5f5f7; font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    </style>
+    <style id="boot-style">
+      /* The launch screen, like the phone app's launch image: black and the bare M in a 56 px box, dead centre. It is the same
+         shape, size and place the app's own opening draws (src/entry/RestoreCover.tsx, src/entry/SplashScreen.tsx), so the
+         hand-off does not jump. It sits OVER #root, so it survives React's first mount; src/platform/webSplashScreen.ts
+         fades it out once the app's first frame is painted (200 ms, like the phone). Never catches taps. A quiet line
+         appears only if the load drags (slow connection); no spinner. */
+      #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: center; background: #000000; pointer-events: none; }
+      #boot.boot-out { opacity: 0; transition: opacity 200ms ease-out; }
+      #boot div { position: relative; width: 56px; height: 56px; }
+      #boot svg { display: block; width: 56px; height: 56px; fill: #f5f5f7; }
+      #boot p { position: absolute; top: 84px; left: 50%; width: 280px; margin: 0 0 0 -140px; text-align: center; opacity: 0;
+        font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: rgba(245, 245, 247, 0.5);
+        animation: boot-in 300ms ease-out 5s forwards; }
+      @keyframes boot-in { to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { #boot.boot-out { transition: none; } #boot p { animation-duration: 1ms; } }
+    </style>
+    <style id="ios-field-size">
+      /* iOS Safari zooms the whole page when a field under 16 px takes focus. Raise the few small ones, iOS only (desktop
+         keeps its sizes); pinch zoom stays on. Fields are matched by testID (react-native-web writes it as data-testid):
+         the hidden one-time-code fields (they set no font size, so react-native-web gives them 14 px) and the Memento
+         view's sealed note (15 px). The other fields in src/ were checked and are 16 px or more. A new field under 16 px
+         needs its testID here, or a font size of 16 or more. */
+      @supports (-webkit-touch-callout: none) {
+        [data-testid="auth-code"], [data-testid="data-code-input"], [data-testid="mf-seal-input"] { font-size: 16px !important; }
+      }
+    </style>
+    <!-- Frame guard: GitHub Pages cannot send frame-ancestors, so another site could frame the app. The app (#root) stays
+         hidden unless this is the top window (frame-guard.js, which runs before the app's own script, says so, and stops
+         the page loading anywhere else). That fails closed: a framed or script-blocked copy shows only the launch mark.
+         Without JavaScript the launch mark is hidden and the noscript line shows. -->
+    <style id="frame-guard-style">html:not([data-top]) #root { display: none; }</style>
+    <noscript><style>#boot { display: none; }</style></noscript>
+    <script src="/frame-guard.js" defer></script>
+    <style id="gate-style">
+      /* The private preview's passcode screen (scripts/lock-web.mjs): black, the bare M, one field, one button. */
+      #gate { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; background: #000000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #f5f5f7; }
+      #gate[hidden] { display: none; }
+      html:not([data-top]) #gate { display: none; }
+      #gate svg { width: 40px; height: 40px; fill: #f5f5f7; margin-bottom: 28px; }
+      #gate h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: -0.2px; }
+      #gate .lead { margin: 0 0 24px; font-size: 15px; line-height: 1.4; color: rgba(245, 245, 247, 0.72); text-align: center; }
+      #gate input { box-sizing: border-box; width: 100%; max-width: 320px; height: 52px; margin: 0 0 10px; padding: 0 18px; border: 0; border-radius: 14px; outline: none;
+        background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); color: #f5f5f7; font: 400 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      #gate input::placeholder { color: rgba(245, 245, 247, 0.4); }
+      #gate button { width: 100%; max-width: 320px; height: 52px; border: 0; border-radius: 26px; background: #f5f5f7; color: #000000; font: 600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; cursor: pointer; }
+      #gate button:disabled { opacity: 0.6; cursor: default; }
+      #gate button:focus-visible, #gate input:focus-visible { box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.6); }
+      #gate .note { min-height: 20px; margin: 14px 0 0; font-size: 14px; color: rgba(245, 245, 247, 0.72); text-align: center; }
+    </style>
+  </head>
+  <body>
+    <noscript>Memento needs JavaScript to run.</noscript>
+    <div id="root"></div>
+    <div id="boot" aria-hidden="true"><div>
+      <svg viewBox="42 40 428 432" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" focusable="false"><path d="M62 55 L256 249 L450 55 L450 457 L62 457 Z" /></svg>
+      <p>Still loading. The first visit downloads about 6 MB.</p>
+    </div></div>
+
+    <form id="gate" hidden autocomplete="off" novalidate>
+      <svg viewBox="42 40 428 432" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" focusable="false"><path d="M62 55 L256 249 L450 55 L450 457 L62 457 Z" /></svg>
+      <h1>Private preview</h1>
+      <p class="lead">Enter the passcode to open Memento.</p>
+      <input id="gate-code" type="password" placeholder="Passcode" aria-label="Passcode" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" />
+      <button id="gate-open" type="submit">Open</button>
+      <p id="gate-note" class="note" role="alert"></p>
+    </form>
+  <script src="/gate.js" data-app="/_expo/static/js/web/index-c94ae16a9d2e5ef449e9c64bbce8789e.bin" data-salt="OqUVDrEt0CUXlpEMCMwGeQ==" data-iter="600000" defer></script>
+</body>
+</html>
