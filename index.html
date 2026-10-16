@@ -43,17 +43,19 @@
       /* The launch screen, like the phone app's launch image: black and the bare M in a 56 px box, dead centre. It is the same
          shape, size and place the app's own opening draws (src/entry/RestoreCover.tsx, src/entry/SplashScreen.tsx), so the
          hand-off does not jump. It sits OVER #root, so it survives React's first mount; src/platform/webSplashScreen.ts
-         fades it out once the app's first frame is painted (200 ms, like the phone). Never catches taps. A quiet line
-         appears only if the load drags (slow connection); no spinner. */
+         fades it out once the app's first frame is painted (200 ms, like the phone). Never catches taps. No text and no
+         spinner: a hairline under the mark shows the download's real progress when there is some to show. */
       #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: center; background: #000000; pointer-events: none; }
       #boot.boot-out { opacity: 0; transition: opacity 200ms ease-out; }
       #boot div { position: relative; width: 56px; height: 56px; }
       #boot svg { display: block; width: 56px; height: 56px; fill: #f5f5f7; }
-      #boot p { position: absolute; top: 84px; left: 50%; width: 280px; margin: 0 0 0 -140px; text-align: center; opacity: 0;
-        font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: rgba(245, 245, 247, 0.5);
-        animation: boot-in 300ms ease-out 5s forwards; }
-      @keyframes boot-in { to { opacity: 1; } }
-      @media (prefers-reduced-motion: reduce) { #boot.boot-out { transition: none; } #boot p { animation-duration: 1ms; } }
+      /* Load progress (web only): a hairline under the mark that fills as the app downloads. It shows only once there is
+         real progress to report (scripts/web-gate/gate.js reports the app's download), so a fast load is the mark alone. */
+      #boot i { position: absolute; top: 88px; left: 50%; width: 120px; height: 2px; margin-left: -60px; border-radius: 1px; overflow: hidden;
+        background: rgba(245, 245, 247, 0.14); opacity: 0; transition: opacity 200ms ease-out; }
+      #boot i b { display: block; width: 100%; height: 100%; border-radius: 1px; background: #f5f5f7; transform: scaleX(0); transform-origin: left center; transition: transform 240ms ease-out; }
+      #boot.boot-progress i { opacity: 1; }
+      @media (prefers-reduced-motion: reduce) { #boot.boot-out, #boot i, #boot i b { transition: none; } }
     </style>
     <style id="ios-field-size">
       /* iOS Safari zooms the whole page when a field under 16 px takes focus. Raise the few small ones, iOS only (desktop
@@ -95,7 +97,7 @@
     <div id="root"></div>
     <div id="boot" aria-hidden="true"><div>
       <svg viewBox="42 40 428 432" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" focusable="false"><path d="M62 55 L256 249 L450 55 L450 457 L62 457 Z" /></svg>
-      <p>Still loading. The first visit downloads about 6 MB.</p>
+      <i><b id="boot-bar"></b></i>
     </div></div>
 
     <form id="gate" hidden autocomplete="off" novalidate>
@@ -106,6 +108,6 @@
       <button id="gate-open" type="submit">Open</button>
       <p id="gate-note" class="note" role="alert"></p>
     </form>
-  <script src="/gate.js" data-app="/_expo/static/js/web/index-c94ae16a9d2e5ef449e9c64bbce8789e.bin" data-salt="XOtB2bGAvLH/cUNYkj4Y9g==" data-iter="600000" defer></script>
+  <script src="/gate.js" data-app="/_expo/static/js/web/index-f91830732410bd7c8e7e6b613e2012b5.bin" data-salt="XOtB2bGAvLH/cUNYkj4Y9g==" data-iter="600000" defer></script>
 </body>
 </html>

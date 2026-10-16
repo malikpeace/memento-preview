@@ -16,12 +16,35 @@
   function remembered() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
   function forget() { try { localStorage.removeItem(KEY); } catch (e) { /* nothing stored */ } }
 
+  // The launch screen's hairline (public/index.html): the app's download fills most of it, starting fills the rest.
+  var bar = document.getElementById('boot-bar');
+  function progress(p) {
+    if (!bar) return;
+    boot.classList.add('boot-progress');
+    bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, p)) + ')';
+  }
+
   function fetchApp() {
     if (sealed) return Promise.resolve(sealed);
     return fetch(APP, { cache: 'force-cache' }).then(function (r) {
       if (!r.ok) throw new Error('fetch');
-      return r.arrayBuffer();
+      var total = Number(r.headers.get('content-length')) || 0;
+      if (!r.body || !total) return r.arrayBuffer();
+      var reader = r.body.getReader(), parts = [], got = 0;
+      function pump() {
+        return reader.read().then(function (step) {
+          if (step.done) { var out = new Uint8Array(got), at = 0; parts.forEach(function (c) { out.set(c, at); at += c.length; }); return out.buffer; }
+          parts.push(step.value); got += step.value.length; progress(0.85 * got / total);
+          return pump();
+        });
+      }
+      return pump();
     }).then(function (buf) { sealed = new Uint8Array(buf); return sealed; });
+  }
+  // The app's script is gzipped before it is encrypted (encrypted bytes do not compress in transit), so it is
+  // unpacked here after decryption.
+  function gunzip(buf) {
+    return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   }
   function keyFrom(code) {
     return crypto.subtle.importKey('raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveKey']).then(function (base) {
@@ -32,15 +55,17 @@
   function start(key) {
     return fetchApp().catch(function () { throw 'load'; }).then(function (data) {
       return crypto.subtle.decrypt({ name: 'AES-GCM', iv: data.slice(0, 12) }, key, data.slice(12)).catch(function () { throw 'wrong'; });
-    }).then(function (js) {
+    }).then(gunzip).then(function (js) {
       gate.hidden = true;
       boot.style.display = '';
+      progress(0.95);
       var s = document.createElement('script');
       s.src = URL.createObjectURL(new Blob([js], { type: 'text/javascript' }));
       document.body.appendChild(s);
     });
   }
   function ask(message) {
+    fetchApp().catch(function () { /* retried on submit */ });   // download while the passcode is typed
     boot.style.display = 'none';
     gate.hidden = false;
     note.textContent = message || '';
@@ -61,6 +86,7 @@
     });
   });
 
+  if (typeof DecompressionStream === 'undefined') { ask('This browser is too old for Memento. Update it and try again.'); button.disabled = true; return; }
   var raw = remembered();
   if (!raw) { ask(); return; }
   crypto.subtle.importKey('raw', bytes(raw), { name: 'AES-GCM' }, false, ['decrypt']).then(start).catch(function (why) {
